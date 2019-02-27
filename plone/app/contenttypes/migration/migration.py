@@ -82,15 +82,11 @@ class BaseCustomMigator(object):
         return
 
 
-class ATCTContentMigrator(CMFItemMigrator):
-    """Base for contentish ATCT
+class ATCTMigrator(object):
+    """
+    Mixin class for ATCT migration common between items and containers.
     """
 
-    def __init__(self, *args, **kwargs):
-        super(ATCTContentMigrator, self).__init__(*args, **kwargs)
-        logger.info(
-            "Migrating {0}".format(
-                '/'.join(self.old.getPhysicalPath())))
 
     def beforeChange_store_default_page(self):
         """If the item is the default page store that info to set it again.
@@ -137,6 +133,17 @@ class ATCTContentMigrator(CMFItemMigrator):
         portal = getToolByName(self.old, 'portal_url').getPortalObject()
         move_comments(portal, self.new)
 
+
+class ATCTContentMigrator(ATCTMigrator, CMFItemMigrator):
+    """Base for contentish ATCT
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(ATCTContentMigrator, self).__init__(*args, **kwargs)
+        logger.info(
+            "Migrating {0}".format(
+                '/'.join(self.old.getPhysicalPath())))
+
     def last_migrate_default_page(self):
         """If the item was the default page set it again."""
         if getattr(self.old, '_migration_is_default_page', False):
@@ -144,7 +151,7 @@ class ATCTContentMigrator(CMFItemMigrator):
             parent.setDefaultPage(self.new.id)
 
 
-class ATCTFolderMigrator(CMFFolderMigrator):
+class ATCTFolderMigrator(ATCTMigrator, CMFFolderMigrator):
     """Base for folderish ATCT
     """
 
@@ -152,40 +159,6 @@ class ATCTFolderMigrator(CMFFolderMigrator):
         super(ATCTFolderMigrator, self).__init__(*args, **kwargs)
         logger.info(
             "Migrating {}".format('/'.join(self.old.getPhysicalPath())))
-
-    def beforeChange_store_comments_on_portal(self):
-        """Comments from plone.app.discussion are lost when the
-           old object is renamed...
-           We save the comments in a safe place..."""
-        portal = getToolByName(self.old, 'portal_url').getPortalObject()
-        move_comments(self.old, portal)
-
-    def migrate_atctmetadata(self):
-        field = self.old.getField('excludeFromNav')
-        if field:
-            self.new.exclude_from_nav = field.get(self.old)
-
-    def migrate_custom(self):
-        """Get all ICustomMigrator registered migrators and run the migration.
-        """
-        for _, migrator in getAdapters((self.old,), ICustomMigrator):
-            migrator.migrate(self.old, self.new)
-
-    def migrate_portlets(self):
-        migrate_portlets(self.old, self.new)
-
-    def migrate_contentrules(self):
-        copy_contentrules(self.old, self.new)
-
-    def migrate_leadimage(self):
-        migrate_leadimage(self.old, self.new)
-
-    def last_migrate_comments(self):
-        """Migrate the plone.app.discussion comments.
-           Comments were stored on the portal, get them and
-           Copy the conversations from old to new object."""
-        portal = getToolByName(self.old, 'portal_url').getPortalObject()
-        move_comments(portal, self.new)
 
     def last_migrate_layout(self):
         """Migrate the layout (view method).
