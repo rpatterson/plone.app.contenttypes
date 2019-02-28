@@ -1,9 +1,21 @@
 # -*- coding: utf-8 -*-
+"""
+Migration functions for specific field types.
+"""
+
+from zope import component
+from zope.intid import interfaces as intid_ifaces
+
+from z3c import relationfield
+
 from Products.CMFPlone.utils import safe_unicode, safe_hasattr
 from plone.event.utils import default_timezone
 from plone.namedfile.file import NamedBlobFile
 from plone.namedfile.file import NamedBlobImage
 from plone.app.textfield.value import RichTextValue
+
+from Products.Archetypes.interfaces import referenceable
+
 import logging
 import pytz
 
@@ -169,6 +181,30 @@ def datetime_fixer(dt, zone):
         return timezone.normalize(dt)
 
 
+def migrate_referencefield(src_obj, dst_obj, src_fieldname, dst_fieldname):
+    """
+    Migrate a ReferenceField to a plone.app.relationfield.
+    """
+    src_field = src_obj.getField(src_fieldname)
+    # The references have already been migrated,
+    # so get them from the new content
+    dst_refable = referenceable.IReferenceable(dst_obj, None)
+    src_targets = src_field.get(dst_refable)
+    if not src_field.multiValued:
+        src_targets = [src_targets]
+
+    intids = component.queryUtility(intid_ifaces.IIntIds)
+    dst_relations = []
+    for src_target in src_targets:
+        dst_relations.append(
+            relationfield.RelationValue(intids.getId(src_target)))
+        dst_refable.deleteReference(referenceable.IReferenceable(src_target))
+    if not src_field.multiValued:
+        dst_relations, = dst_relations
+
+    setattr(dst_obj, dst_fieldname, dst_relations)
+
+
 # This mapping is needed to get the right migration method
 # we use the full field type path as it is retrieved from the target-field
 # (field.getType()), to avoid conflict.
@@ -178,4 +214,5 @@ FIELDS_MAPPING = {'RichText': migrate_richtextfield,
                   'NamedBlobFile': migrate_filefield,
                   'NamedBlobImage': migrate_imagefield,
                   'Datetime': migrate_datetimefield,
-                  'Date': migrate_datetimefield}
+                  'Date': migrate_datetimefield,
+                  'ReferenceField': migrate_referencefield}

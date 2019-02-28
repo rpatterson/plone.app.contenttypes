@@ -498,11 +498,17 @@ class CustomMigrationFunctionalTests(unittest.TestCase):
         self.browser.open('%s/@@custom_migration' % self.portal_url)
         results = self.browser.contents
         self.assertIn('Custom types migration control panel', results)
-        self.assertIn('<input type="hidden" name="Document:list" value="text__type__Products.Archetypes.Field.TextField" />', results)  # noqa
+        self.assertIn(
+            ('<input type="hidden" name="Document:list" value="text__type__'
+             'Products.Archetypes.Field.TextField"'),
+            results)
         self.assertEqual(self.browser.getControl(name='dx_select_Document').value, [''])  # noqa
         # chose to migrate to Link
         self.browser.getControl(name='dx_select_Document').value = ['Link']
-        self.assertIn('<input type="hidden" name="Event:list" value="startDate__type__Products.Archetypes.Field.DateTimeField" />', results)  # noqa
+        self.assertIn(
+            ('<input type="hidden" name="Event:list" value="startDate__type__'
+             'Products.Archetypes.Field.DateTimeField"'),
+            results)
         # chose to migrate to Link
         self.browser.getControl(name='dx_select_Event').value = ['Link']
         # run migration
@@ -541,11 +547,17 @@ class CustomMigrationFunctionalTests(unittest.TestCase):
         self.browser.open('%s/@@custom_migration' % self.portal_url)
         results = self.browser.contents
         self.assertIn('Custom types migration control panel', results)
-        self.assertIn('<input type="hidden" name="News_space_Item:list" value="text__type__Products.Archetypes.Field.TextField" />', results)  # noqa
+        self.assertIn(
+            ('<input type="hidden" name="News_space_Item:list" value="'
+             'text__type__Products.Archetypes.Field.TextField"'),
+            results)
         self.assertEqual(self.browser.getControl(name='dx_select_News_space_Item').value, [''])  # noqa
         # chose to migrate to Link
         self.browser.getControl(name='dx_select_News_space_Item').value = ['Link']  # noqa
-        self.assertIn('<input type="hidden" name="Event:list" value="startDate__type__Products.Archetypes.Field.DateTimeField" />', results)  # noqa
+        self.assertIn(
+            ('<input type="hidden" name="Event:list" value="'
+             'startDate__type__Products.Archetypes.Field.DateTimeField"'),
+            results)
         # chose to migrate to Link
         self.browser.getControl(name='dx_select_Event').value = ['Link']
         # run migration

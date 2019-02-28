@@ -24,8 +24,6 @@ from plone.app.contenttypes.migration.patches import \
 from plone.app.contenttypes.migration.utils import HAS_LINGUA_PLONE
 from plone.app.contenttypes.migration.utils import installTypeIfNeeded
 from plone.app.contenttypes.migration.utils import isSchemaExtended
-from plone.app.contenttypes.migration.utils import restore_references
-from plone.app.contenttypes.migration.utils import store_references
 from plone.app.contenttypes.migration.vocabularies import ATCT_LIST
 from plone.app.contenttypes.utils import DEFAULT_TYPES
 from plone.app.contenttypes.upgrades import use_new_view_names
@@ -128,7 +126,6 @@ class MigrateFromATContentTypes(BrowserView):
                  migrate=False,
                  content_types="all",
                  migrate_schemaextended_content=False,
-                 migrate_references=True,
                  from_form=False):
 
         portal = self.context
@@ -160,9 +157,6 @@ class MigrateFromATContentTypes(BrowserView):
         stats_before = self.stats()
         starttime = datetime.now()
 
-        # store references on the portal
-        if migrate_references:
-            store_references(portal)
         catalog = portal.portal_catalog
 
         # switch linkintegrity temp off
@@ -244,10 +238,6 @@ class MigrateFromATContentTypes(BrowserView):
         use_new_view_names(portal, types_to_fix=['Plone Site'])
 
         catalog.clearFindAndRebuild()
-
-        # restore references
-        if migrate_references:
-            restore_references(portal)
 
         # switch linkintegrity back to what it was before migrating
         if link_integrity_in_props:
@@ -337,14 +327,6 @@ class IATCTMigratorForm(Interface):
         required=False,
     )
 
-    migrate_references = schema.Bool(
-        title=u"Migrate references?",
-        description=(
-            u"Select this option to migrate references."
-        ),
-        default=True
-    )
-
     extended_content = schema.List(
         title=(
             u"Migrate content that was extended "
@@ -387,7 +369,6 @@ class ATCTMigratorForm(form.Form):
         results = migration_view(
             content_types=content_types,
             migrate_schemaextended_content=True,
-            migrate_references=data['migrate_references'],
             from_form=True,
         )
         sdm = getToolByName(context, "session_data_manager")

@@ -57,14 +57,12 @@
         </strong>
         </p>
         <p>
-        <span i18n:translate="" tal:omit-tag="">Please note that migrating references will increase this time.</span>
         </p>
       </div>
       <div id="migration-options">
         <h2 i18n:translate="">Migrate contents</h2>
         <div class="documentDescription">
-          <p i18n:translate="">You can select which content types you want to migrate and
-            choose to migrate references or not.</p>
+          <p i18n:translate="">You can select which content types you want to migrate.</p>
         </div>
         <div id="migration-form"
              tal:content="structure view/contents">

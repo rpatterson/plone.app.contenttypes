@@ -10,8 +10,6 @@ from plone.app.contenttypes.migration.migration import migrate_newsitems
 from plone.app.contenttypes.migration.utils import add_portlet
 from plone.app.contenttypes.migration.utils import installTypeIfNeeded
 from plone.app.contenttypes.migration.utils import is_referenceable
-from plone.app.contenttypes.migration.utils import restore_references
-from plone.app.contenttypes.migration.utils import store_references
 from plone.app.contenttypes.testing import PLONE_APP_CONTENTTYPES_FUNCTIONAL_TESTING  # noqa
 from plone.app.contenttypes.testing import PLONE_APP_CONTENTTYPES_MIGRATION_FUNCTIONAL_TESTING  # noqa
 from plone.app.contenttypes.testing import PLONE_APP_CONTENTTYPES_MIGRATION_TESTING  # noqa
@@ -27,6 +25,7 @@ from plone.dexterity.interfaces import IDexterityContent
 from plone.dexterity.interfaces import IDexterityFTI
 from plone.event.interfaces import IEventAccessor
 from plone.namedfile.file import NamedBlobImage
+from plone import api
 from plone.testing.z2 import Browser
 from z3c.relationfield import RelationValue
 from z3c.relationfield.index import dump
@@ -888,14 +887,12 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
             migrate=True,
             content_types=['Document'],
             migrate_schemaextended_content=True,
-            migrate_references=True,
             from_form=False,
         )
         migration_view(
             migrate=True,
             content_types=['Folder'],
             migrate_schemaextended_content=True,
-            migrate_references=True,
             from_form=False,
         )
 
@@ -965,9 +962,15 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         self.assertTrue(at_child in dx_folder.contentValues())
 
     def test_relations_are_migrated(self):
+        """
+        Test that relations and references are migrated.
+        """
+        from Products.Archetypes.interfaces import referenceable
+
         # IIntIds is not registered in the test env. So register it here
         sm = getSiteManager(self.portal)
         addUtility(sm, IIntIds, IntIds, ofs_name='intids', findroot=False)
+        intids = getUtility(IIntIds)
 
         # create folders
         self.portal.invokeFactory('Folder', 'folder1')
@@ -978,6 +981,8 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         # create ATDocuments
         at_folder1.invokeFactory('Document', 'doc1')
         at_doc1 = at_folder1['doc1']
+        at_doc1_uuid = api.content.get_uuid(at_doc1)
+        at_doc1_intid = intids.getId(at_doc1)
         at_folder2.invokeFactory('Document', 'doc2')
         at_doc2 = at_folder2['doc2']
         self.portal.invokeFactory('Document', 'doc3')
@@ -986,16 +991,18 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
 
         # relate them
         at_doc1.setRelatedItems([at_doc2])
+        at_doc1.addReference(at_doc3, relationship='fooRelationship')
         at_doc3.setRelatedItems(at_doc1)
         at_folder1.setRelatedItems([at_doc2])
         at_folder2.setRelatedItems([at_doc1])
         self.assertEqual([x for x in at_folder2.getRelatedItems()], [at_doc1])
         # migrate content
         applyProfile(self.portal, 'plone.app.contenttypes:default')
+        applyProfile(self.portal, 'plone.app.referenceablebehavior:default')
         self._enable_referenceable_for('Folder')
         self._enable_referenceable_for('Document')
         self._enable_referenceable_for('News Item')
-        store_references(self.portal)
+
         migrate_documents(self.portal)
         migrate_folders(self.portal)
         migrate_newsitems(self.portal)
@@ -1010,10 +1017,35 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         dx_doc2 = dx_folder2['doc2']
         dx_doc3 = self.portal['doc3']
 
-        self.assertEqual([x.to_object for x in dx_folder2.relatedItems], [])
+        self.assertTrue(
+            api.content.get_uuid(dx_doc1),
+            'No UUID after migration')
+        self.assertEqual(
+            api.content.get_uuid(dx_doc1), at_doc1_uuid,
+            'UUID not preserved after migration')
+        uid_catalog = api.portal.get_tool('uid_catalog')
+        self.assertEqual(
+            '/'.join(uid_catalog(
+                UID=at_doc1_uuid)[0].getObject().getPhysicalPath()),
+            '/'.join(dx_doc1.getPhysicalPath()),
+            'UID catalog has wrong object indexed for the UUID')
+        dx_doc1_refs = referenceable.IReferenceable(dx_doc1)
+        dx_doc1_custom_refs = dx_doc1_refs.getRefs(
+            relationship='fooRelationship')
+        self.assertEqual(
+            len(dx_doc1_custom_refs), 1,
+            'Wrong number of migrated references')
+        self.assertEqual(
+            '/'.join(dx_doc1_custom_refs[0].getPhysicalPath()),
+            '/'.join(dx_doc3.getPhysicalPath()),
+            'Wrong custom relationship reference after migration')
+        self.assertEqual(
+            intids.getId(dx_doc1), at_doc1_intid,
+            'IntId not preserved after migration')
 
-        # migrate references
-        restore_references(self.portal)
+        self.assertEqual(
+            [x.to_object for x in dx_folder2.relatedItems], [dx_doc1],
+            'Wrong folder related items after migration')
 
         self.assertEqual(
             [x.to_object for x in dx_folder2.relatedItems], [dx_doc1])
@@ -1061,7 +1093,6 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
             # blacklisted_steps=['typeinfo']
         )
         # installTypeIfNeeded('News Item')
-        store_references(self.portal)
         migrate_newsitems(self.portal)
         migrate_documents(self.portal)
 
@@ -1075,9 +1106,6 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         self.assertEqual(dx_news.relatedItems, [])
         self.assertEqual(at_doc.getReferences(), [])
         self.assertEqual(at_doc.getBackReferences(), [])
-
-        # restore references
-        restore_references(self.portal)
 
         # references should be restored
         self.assertEqual([i.to_object for i in dx_news.relatedItems], [dx_doc])
@@ -1116,7 +1144,6 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         installTypeIfNeeded('Folder')
         self._enable_referenceable_for('Folder')
 
-        store_references(self.portal)
         migrate_folders(self.portal)
 
         # rebuild catalog
@@ -1128,9 +1155,6 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         self.assertEqual(dx_folder.relatedItems, [])
         self.assertEqual(at_doc.getReferences(), [])
         self.assertEqual(at_doc.getBackReferences(), [])
-
-        # restore references
-        restore_references(self.portal)
 
         # references should be restored
         self.assertEqual(
@@ -1168,7 +1192,6 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
             'plone.app.contenttypes:default',
             blacklisted_steps=['typeinfo'])
         installTypeIfNeeded('Document')
-        store_references(self.portal)
         migrate_documents(self.portal)
         self._enable_referenceable_for('Document')
 
@@ -1184,9 +1207,6 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         self.assertNotEqual(at_folder.getRelatedItems(), [at_doc])
         self.assertEqual(dx_doc.relatedItems, [])
         self._backrefs(dx_doc)
-
-        # restore references
-        restore_references(self.portal)
 
         # references should be restored
         self.assertEqual(at_folder.getRelatedItems(), [dx_doc])
@@ -1220,51 +1240,6 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         behaviors = list(fti.behaviors)
         behaviors.append(behavior)
         fti._updateProperty('behaviors', tuple(behaviors))
-
-    @unittest.skip('blacklisted_steps only available in Plone 5')
-    def test_store_references(self):
-        # IIntIds is not registered in the test env. So register it here
-        sm = getSiteManager(self.portal)
-        addUtility(sm, IIntIds, IntIds, ofs_name='intids', findroot=False)
-        intids = getUtility(IIntIds)
-
-        applyProfile(
-            self.portal,
-            'plone.app.contenttypes:default',
-            blacklisted_steps=['typeinfo'])
-        installTypeIfNeeded('News Item')
-
-        # create ATFolder and ATDocument
-        self.portal.invokeFactory('Folder', 'folder')
-        at_folder = self.portal['folder']
-        self.portal.invokeFactory('Document', 'doc')
-        at_doc = self.portal['doc']
-        # relate them
-        at_folder.setRelatedItems([at_doc])
-
-        # create DX News Items
-        self.portal.invokeFactory('News Item', 'news1')
-        dx_news1 = self.portal['news1']
-        self.portal.invokeFactory('News Item', 'news2')
-        dx_news2 = self.portal['news2']
-        dx_news1.relatedItems = PersistentList()
-        dx_news1.relatedItems.append(RelationValue(intids.getId(dx_news2)))
-        modified(dx_news1)
-        relation_catalog = queryUtility(ICatalog)
-        all_rels = [i for i in relation_catalog.findRelations()]
-        self.assertEqual(len(all_rels), 1)
-
-        self.assertEqual(at_folder.getRelatedItems(), [at_doc])
-        self.assertEqual(at_folder.getReferences(), [at_doc])
-        self.assertEqual(at_folder.getBackReferences(), [])
-        self.assertEqual(at_doc.getReferences(), [])
-        self.assertEqual(at_doc.getBackReferences(), [at_folder])
-        self.assertEqual(
-            [i.to_object for i in dx_news1.relatedItems], [dx_news2])
-
-        store_references(self.portal)
-        key = 'ALL_REFERENCES'
-        self.assertEqual(len(IAnnotations(self.portal)[key]), 2)
 
     @unittest.skip('blacklisted_steps only available in Plone 5')
     def test_export_references(self):
@@ -1343,12 +1318,11 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         all_rels = [i for i in relation_catalog.findRelations()]
         self.assertEqual(len(all_rels), 2)
 
-        store_references(self.portal)
         # migration_view = getMultiAdapter(
         #     (self.portal, self.request),
         #     name=u'migrate_from_atct'
         # )
-        # migration_view(from_form=True, migrate_references=False)
+        # migration_view(from_form=True)
 
         # this is basically be the same as above
         installTypeIfNeeded('Document')
@@ -1356,7 +1330,6 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         migrate_folders(self.portal)
         migrate_documents(self.portal)
         self.portal.portal_catalog.clearFindAndRebuild()
-        restore_references(self.portal)
 
         dx_folder = self.portal['folder']
         dx_doc = self.portal['doc']
@@ -1419,7 +1392,7 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
 
         self.assertEqual(
             5,
-            len(vocabulary),
+           len(vocabulary),
             'Expect 5 entries in vocab because there are 5 diffrent types')
 
         # Result format
@@ -1437,8 +1410,6 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         self.assertEqual((), tuple(vocabulary))
 
     def test_migration_extendedtypes_vocabulary_result(self):
-        from archetypes.schemaextender.extender import CACHE_ENABLED
-        from archetypes.schemaextender.extender import CACHE_KEY
         from archetypes.schemaextender.field import ExtensionField
         from archetypes.schemaextender.interfaces import ISchemaExtender
         from Products.Archetypes import atapi
@@ -1477,8 +1448,6 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         provideAdapter(DummySchemaExtender, name=u"dummy.extender")
 
         # Clear cache
-        if CACHE_ENABLED:
-            delattr(self.request, CACHE_KEY)
         self.assertIn('dummy', doc.Schema()._names)
 
         vocabulary = factory(self.portal)
@@ -2082,7 +2051,6 @@ class MigrationFunctionalTests(unittest.TestCase):
         self.assertIn('You currently have <span class="strong">1</span> archetypes objects to be migrated.', self.browser.contents)  # noqa
 
         self.browser.getControl(name='form.widgets.content_types:list').value = ['Document']  # noqa
-        self.assertEqual(self.browser.getControl(name='form.widgets.migrate_references:list').value, ['selected'])  # noqa
         self.browser.getControl(name='form.buttons.migrate').click()
         self.assertIn('Congratulations! You migrated from Archetypes to Dexterity.', self.browser.contents)  # noqa
         msg = "<td>ATDocument</td>\n      <td>Document</td>\n      <td>1</td>"

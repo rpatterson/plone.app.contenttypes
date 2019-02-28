@@ -78,6 +78,10 @@ class PloneAppContenttypesMigration(PloneSandboxLayer):
         import Products.ATContentTypes
         self.loadZCML(package=Products.ATContentTypes)
 
+        # prepare installing plone.app.referenceablebehavior
+        import plone.app.referenceablebehavior
+        self.loadZCML(package=plone.app.referenceablebehavior)
+
         z2.installProduct(app, 'Products.Archetypes')
         z2.installProduct(app, 'Products.ATContentTypes')
         z2.installProduct(app, 'plone.app.blob')

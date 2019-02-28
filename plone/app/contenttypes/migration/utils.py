@@ -20,19 +20,12 @@ from plone.app.contenttypes.migration.field_migrators import \
 from plone.app.contenttypes.utils import DEFAULT_TYPES
 from plone.app.discussion.conversation import ANNOTATION_KEY as DISCUSSION_KEY
 from plone.app.discussion.interfaces import IConversation
-from plone.app.linkintegrity.handlers import modifiedArchetype
-from plone.app.linkintegrity.handlers import modifiedDexterity
-from plone.app.linkintegrity.handlers import referencedRelationship
-from plone.app.uuid.utils import uuidToObject
 from plone.contentrules.engine.interfaces import IRuleAssignmentManager
-from plone.dexterity.interfaces import IDexterityContent
 from plone.dexterity.interfaces import IDexterityFTI
 from plone.portlets.constants import CONTEXT_BLACKLIST_STATUS_KEY
 from plone.portlets.interfaces import ILocalPortletAssignable
 from plone.portlets.interfaces import IPortletAssignmentMapping
 from plone.portlets.interfaces import IPortletManager
-from plone.uuid.interfaces import IUUID
-from z3c.relationfield import RelationValue
 from zc.relation.interfaces import ICatalog
 from zExceptions import NotFound
 from zope.annotation.interfaces import IAnnotations
@@ -42,8 +35,6 @@ from zope.component import getSiteManager
 from zope.component import getUtility
 from zope.component import queryUtility
 from zope.component.hooks import getSite
-from zope.intid.interfaces import IIntIds
-from zope.lifecycleevent import modified
 from Products.Five.browser import BrowserView
 import json
 
@@ -266,15 +257,6 @@ def migrate_portlets(src_obj, dst_obj):
                             'for manager {1}'.format(key, manager))
 
 
-def store_references(context):
-    """Store all references in the portal as a annotation on the portal."""
-    all_references = get_all_references(context)
-    key = 'ALL_REFERENCES'
-    IAnnotations(context)[key] = all_references
-    logger.info('Stored {} relations for later restore.'.format(
-        len(all_references)))
-
-
 class ExportAllReferences(BrowserView):
     """Returns all references in the portal as json.
     """
@@ -312,164 +294,6 @@ def get_all_references(context):
                 'relationship': rel.from_attribute,
             })
     return results
-
-
-def restore_references(context):
-    """Recreate all references stored in an annotation on the context.
-
-    Iterate over the stored references and restore them all according to
-    the content-types framework.
-    """
-    key = 'ALL_REFERENCES'
-    for ref in IAnnotations(context)[key]:
-        source_obj = uuidToObject(ref['from_uuid'])
-        target_obj = uuidToObject(ref['to_uuid'])
-        if source_obj and target_obj:
-            relationship = ref['relationship']
-            link_items(context, source_obj, target_obj, relationship)
-        else:
-            logger.warn(
-                'Could not restore reference from uid '
-                '"%s" to uid "%s" on the context: %s' % (
-                    ref['from_uuid'], ref['to_uuid'],
-                    '/'.join(context.getPhysicalPath())))
-    del IAnnotations(context)[key]
-
-
-def link_items(  # noqa
-    context,
-    source_obj,
-    target_obj,
-    relationship=None,
-    fieldname='relatedItems',
-):
-    """Add a relation between two content objects.
-
-    This uses the field 'relatedItems' and works for Archetypes and Dexterity.
-    By passing a fieldname and a relationship it can be used to create
-    arbitrary relations.
-    """
-    # relations from AT to DX and from DX to AT are only possible through
-    # the referenceable-behavior:
-    # plone.app.referenceablebehavior.referenceable.IReferenceable
-    drop_msg = """Dropping reference from %s to %s since
-    plone.app.referenceablebehavior is not enabled!"""
-
-    if source_obj is target_obj:
-        # Thou shalt not relate to yourself.
-        return
-
-    # if fieldname != 'relatedItems':
-        # 'relatedItems' is the default field for AT and DX
-        # See plone.app.relationfield.behavior.IRelatedItems for DX and
-        # Products.ATContentTypes.content.schemata.relatedItemsField for AT
-        # They always use these relationships:
-        # 'relatesTo' (Archetpyes) and 'relatedItems' (Dexterity)
-        # Maybe be we should handle custom relations somewhat different?
-
-    if relationship in ['relatesTo', 'relatedItems']:
-        # These are the two default-relationships used by AT and DX
-        # for the field 'relatedItems' respectively.
-        pass
-
-    if IDexterityContent.providedBy(source_obj):
-        source_type = 'DX'
-    else:
-        source_type = 'AT'
-
-    if IDexterityContent.providedBy(target_obj):
-        target_type = 'DX'
-    else:
-        target_type = 'AT'
-
-    if relationship == referencedRelationship:
-        # 'relatesTo' is the relationship for linkintegrity-relations.
-        # Linkintegrity-relations should automatically be (re)created by
-        # plone.app.linkintegrity.handlers.modifiedDexterity or
-        # plone.app.linkintegrity.handlers.modifiedArchetype
-        # when a ObjectModifiedEvent is thrown.
-        # These relations are only created if the source has a richtext-field
-        # with a link to the target and should not be created manually.
-        if source_type == 'AT':
-            modifiedArchetype(source_obj, None)
-        if source_type == 'DX' and is_referenceable(source_obj):
-            modifiedDexterity(source_obj, None)
-        return
-
-    if source_type == 'AT':
-        # If there is any Archetypes-content there is also the
-        # reference_catalog and the uid_catalog.
-        # For a site without AT content these might not be there at all.
-        reference_catalog = getToolByName(context, REFERENCE_CATALOG)
-        uid_catalog = getToolByName(context, 'uid_catalog')
-        if target_type == 'DX' and not is_referenceable(target_obj):
-            logger.info(drop_msg % (
-                source_obj.absolute_url(), target_obj.absolute_url()))
-            return
-
-        # Make sure both objects are properly indexed and referenceable
-        # Some objects that werde just created (migrated) are not yet
-        # indexed properly.
-        source_uid = IUUID(source_obj)
-        target_uid = IUUID(target_obj)
-        _catalog = uid_catalog._catalog
-
-        if not _catalog.indexes['UID']._index.get(source_uid):
-            uid_catalog.catalog_object(source_obj, source_uid)
-            modified(source_obj)
-
-        if not _catalog.indexes['UID']._index.get(target_uid):
-            uid_catalog.catalog_object(target_obj, target_uid)
-            modified(target_obj)
-
-        field = source_obj.getField(fieldname)
-        if field is None:
-            # We can't migrate if it doesn't actually have the field
-            return
-
-        accessor = field.getAccessor(source_obj)
-        existing_at_relations = accessor()
-
-        if not isinstance(existing_at_relations, list):
-            existing_at_relations = [i for i in existing_at_relations]
-        if not existing_at_relations:
-            existing_at_relations = []
-        if target_obj in existing_at_relations:
-            # don't do anything
-            return
-
-        target_uid = IUUID(target_obj)
-        targetUIDs = [ref.targetUID for ref in reference_catalog.getReferences(
-            source_obj, relationship)]
-        if target_uid in targetUIDs:
-            # Replace relations since is probably broken.
-            reference_catalog.deleteReference(
-                source_obj, target_uid, relationship)
-
-        existing_at_relations.append(target_obj)
-        mutator = field.getMutator(source_obj)
-        mutator(existing_at_relations)
-        modified(source_obj)
-        return
-
-    if source_type is 'DX':
-        if target_type is 'AT' and not is_referenceable(source_obj):
-            logger.info(drop_msg % (
-                source_obj.absolute_url(), target_obj.absolute_url()))
-            return
-        # handle dx-relation
-        intids = getUtility(IIntIds)
-        to_id = intids.getId(target_obj)
-        existing_dx_relations = getattr(source_obj, fieldname, [])
-        # purge broken relations
-        existing_dx_relations = [
-            i for i in existing_dx_relations if i.to_id is not None]
-
-        if to_id not in [i.to_id for i in existing_dx_relations]:
-            existing_dx_relations.append(RelationValue(to_id))
-            setattr(source_obj, fieldname, existing_dx_relations)
-            modified(source_obj)
-            return
 
 
 def is_referenceable(obj):
