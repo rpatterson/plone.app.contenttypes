@@ -10,7 +10,8 @@ Breaking changes:
 
 New features:
 
-- *add item here*
+- Migrations: Add automatic DX field type detection for field migrators.
+  [rpatterson]
 
 Bug fixes:
 

@@ -35,6 +35,7 @@ from plone.app.contenttypes.migration.field_migrators import \
 from plone.app.contenttypes.upgrades import LISTING_VIEW_MAPPING
 from plone.dexterity.interfaces import IDexterityContent
 from plone.dexterity.interfaces import IDexterityFTI
+from plone.dexterity import utils as dx_utils
 
 from Products.Archetypes.interfaces import referenceable
 
@@ -479,6 +480,12 @@ def makeCustomATMigrator(
                 at_fieldname = fields_dict.get('AT_field_name')
                 dx_fieldname = fields_dict.get('DX_field_name')
                 dx_fieldtype = fields_dict.get('DX_field_type')
+                if dx_fieldtype is None:
+                    for schema in dx_utils.iterSchemata(self.new):
+                        field = schema.get(dx_fieldname)
+                        if field is not None:
+                            dx_fieldtype = type(field).__name__
+                            break
                 migration_field_method = fields_dict.get('field_migrator')
                 if not migration_field_method:
                     if dx_fieldtype in FIELDS_MAPPING:
