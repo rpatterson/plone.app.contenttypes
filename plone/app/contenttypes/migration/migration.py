@@ -144,7 +144,7 @@ class ATCTMigrator(object):
     def migrate_leadimage(self):
         migrate_leadimage(self.old, self.new)
 
-    def migrate_at_uuid(self):
+    def last_migrate_at_uuid(self):
         """
         Transfer the any AT references to the new content.
         """
@@ -157,7 +157,7 @@ class ATCTMigrator(object):
                 old_refs.deleteReference(
                     target_refs, relationship=ref.relationship)
 
-        super(ATCTMigrator, self).migrate_at_uuid()
+        super(ATCTMigrator, self).last_migrate_at_uuid()
 
         new_refs = referenceable.IReferenceable(self.new, None)
         if old_refs is not None and new_refs is not None:
