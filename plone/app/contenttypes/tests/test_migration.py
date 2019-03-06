@@ -1048,11 +1048,9 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         self.portal.invokeFactory('Document', 'doc3')
         at_doc3 = self.portal['doc3']
         at_folder1.invokeFactory('News Item', 'newsitem')
-        at_newsitem = at_folder1['newsitem']
 
         # relate them
         at_doc1.setRelatedItems([at_doc2])
-        at_doc2.setRelatedItems([at_newsitem, at_doc3, at_doc1])
         at_doc3.setRelatedItems(at_doc1)
         at_folder1.setRelatedItems([at_doc2])
         at_folder2.setRelatedItems([at_doc1])
@@ -1095,10 +1093,6 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         self.assertEqual(dx_folder1_related, [dx_doc2])
         dx_folder2_related = [x.to_object for x in dx_folder2.relatedItems]
         self.assertEqual(dx_folder2_related, [dx_doc1])
-
-        # assert multi references, order is restored
-        dx_doc2_related = [x.to_object for x in dx_doc2.relatedItems]
-        self.assertEqual(dx_doc2_related, [at_newsitem, dx_doc3, dx_doc1])
 
     def test_backrelations_are_migrated_for_unnested_content(self):
         """relate a doc to a newsitem, migrate the newsitem but not the doc.
