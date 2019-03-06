@@ -190,8 +190,8 @@ def migrate_referencefield(src_obj, dst_obj, src_fieldname, dst_fieldname):
     src_field = src_obj.getField(src_fieldname)
     # The references have already been migrated,
     # so get them from the new content
-    dst_refable = referenceable.IReferenceable(dst_obj, None)
-    src_targets = src_field.get(dst_refable)
+    src_refable = referenceable.IReferenceable(src_obj, None)
+    src_targets = src_field.get(src_refable)
     if not src_field.multiValued:
         src_targets = [src_targets]
 
@@ -200,7 +200,7 @@ def migrate_referencefield(src_obj, dst_obj, src_fieldname, dst_fieldname):
     for src_target in src_targets:
         dst_relations.append(
             relationfield.RelationValue(intids.getId(src_target)))
-        dst_refable.deleteReference(referenceable.IReferenceable(src_target))
+        src_refable.deleteReference(referenceable.IReferenceable(src_target))
     if not src_field.multiValued:
         dst_relations, = dst_relations
 

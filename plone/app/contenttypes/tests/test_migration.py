@@ -1118,9 +1118,6 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
             [x.to_object for x in dx_folder2.relatedItems], [dx_doc1],
             'Wrong folder related items after migration')
 
-        self.assertEqual(
-            [x.to_object for x in dx_folder2.relatedItems], [dx_doc1])
-
         # assert single references
         dx_doc1_related = [x.to_object for x in dx_doc1.relatedItems]
         self.assertEqual(dx_doc1_related, [dx_doc2])
