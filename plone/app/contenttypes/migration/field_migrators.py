@@ -190,6 +190,8 @@ def migrate_referencefield(src_obj, dst_obj, src_fieldname, dst_fieldname):
     # so get them from the new content
     src_refable = referenceable.IReferenceable(src_obj, None)
     src_targets = src_field.get(src_refable)
+    if src_targets is src_field.getDefault(src_obj):
+        return
     if not src_field.multiValued:
         src_targets = [src_targets]
 
