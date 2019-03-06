@@ -13,8 +13,6 @@ from plone.app.contenttypes.migration.patches import patch_before_migration
 from plone.app.contenttypes.migration.patches import undo_patch_after_migration
 from plone.app.contenttypes.migration.utils import installTypeIfNeeded
 from plone.app.contenttypes.migration.utils import isSchemaExtended
-from plone.app.contenttypes.migration.utils import restore_references
-from plone.app.contenttypes.migration.utils import store_references
 from plone.app.contenttypes.migration.vocabularies import ATCT_LIST
 from plone.app.contenttypes.upgrades import use_new_view_names
 from plone.app.contenttypes.utils import DEFAULT_TYPES
@@ -109,7 +107,6 @@ class MigrateFromATContentTypes(BrowserView):
                  migrate=False,
                  content_types='all',
                  migrate_schemaextended_content=False,
-                 migrate_references=True,
                  from_form=False,
                  reindex_catalog=True,
                  patch_searchabletext=False,
@@ -154,9 +151,6 @@ class MigrateFromATContentTypes(BrowserView):
         msg += '\n-----------------------------\n'
         logger.info(msg)
 
-        # store references on the portal
-        if migrate_references:
-            store_references(portal)
         catalog = portal.portal_catalog
 
         # Patch various things that make migration harder
@@ -220,10 +214,6 @@ class MigrateFromATContentTypes(BrowserView):
         if reindex_catalog:
             catalog.clearFindAndRebuild()
 
-        # restore references
-        if migrate_references:
-            restore_references(portal)
-
         # Revert to the original state
         undo_patch_after_migration(
             link_integrity, queue_indexing, patch_searchabletext)
@@ -283,15 +273,6 @@ class IATCTMigratorForm(Interface):
         value_type=schema.Choice(
             vocabulary='plone.app.contenttypes.migration.atctypes',
         ),
-        required=False,
-    )
-
-    migrate_references = schema.Bool(
-        title=u'Migrate references?',
-        description=(
-            u'Select this option to migrate references.'
-        ),
-        default=True,
         required=False,
     )
 
@@ -357,7 +338,6 @@ class ATCTMigratorForm(form.Form):
         self.results = migration_view(
             content_types=content_types,
             migrate_schemaextended_content=True,
-            migrate_references=data['migrate_references'],
             from_form=True,
             reindex_catalog=data['reindex_catalog'],
             patch_searchabletext=data['patch_searchabletext'],

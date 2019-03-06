@@ -10,6 +10,7 @@ you catch ImportErrors
 from plone.app.contenttypes.behaviors.collection import ICollection
 from plone.app.contenttypes.migration.dxmigration import DXEventMigrator
 from plone.app.contenttypes.migration.dxmigration import DXOldEventMigrator
+from plone.app.contenttypes.migration import field_migrators
 from plone.app.contenttypes.migration.field_migrators import FIELDS_MAPPING
 from plone.app.contenttypes.migration.field_migrators import migrate_blobimagefield  # noqa
 from plone.app.contenttypes.migration.field_migrators import migrate_datetimefield  # noqa
@@ -27,6 +28,7 @@ from plone.app.contenttypes.upgrades import LISTING_VIEW_MAPPING
 from plone.app.dexterity.behaviors.nextprevious import INextPreviousToggle
 from plone.dexterity.interfaces import IDexterityContent
 from plone.dexterity.interfaces import IDexterityFTI
+from Products.Archetypes.interfaces import referenceable
 from Products.CMFCore.utils import getToolByName
 from Products.contentmigration.basemigrator.migrator import CMFFolderMigrator
 from Products.contentmigration.basemigrator.migrator import CMFItemMigrator
@@ -34,12 +36,15 @@ from Products.contentmigration.basemigrator.walker import CatalogWalker
 from Products.contentmigration.walker import CustomQueryWalker
 from Acquisition import aq_base
 from zExceptions import NotFound
+from zope import component
 from zope.component import adapter
 from zope.component import getAdapters
 from zope.component import getMultiAdapter
 from zope.component.hooks import getSite
 from zope.interface import implementer
 from zope.interface import Interface
+from zope.keyreference import interfaces as keyref_ifaces
+from zope.intid import interfaces as intid_ifaces
 
 import logging
 import transaction
@@ -88,6 +93,8 @@ class ATCTMigrator(object):
     Mixin class for ATCT migration common between items and containers.
     """
 
+    intid = None
+
     def __init__(self, *args, **kwargs):
         super(ATCTMigrator, self).__init__(*args, **kwargs)
         logger.info(
@@ -96,6 +103,14 @@ class ATCTMigrator(object):
                 '/'.join(self.old.getPhysicalPath())
             )
         )
+
+    def beforeChange_store_intid(self):
+        """
+        Capture the IntId before renaming the old content changes it.
+        """
+        intids = component.queryUtility(intid_ifaces.IIntIds)
+        if intids is not None:
+            self.intid = intids.queryId(self.old)
 
     def beforeChange_store_comments_on_portal(self):
         """Comments from plone.app.discussion are lost when the
@@ -123,6 +138,52 @@ class ATCTMigrator(object):
 
     def migrate_leadimage(self):
         migrate_leadimage(self.old, self.new)
+
+    def migrate_at_uuid(self):
+        """
+        Transfer the any AT references to the new content.
+        """
+        old_refs = referenceable.IReferenceable(self.old, None)
+        if old_refs is not None:
+            refs = old_refs.getReferenceImpl()
+            for ref in refs:
+                target_refs = referenceable.IReferenceable(
+                    ref.getTargetObject())
+                old_refs.deleteReference(
+                    target_refs, relationship=ref.relationship)
+
+        super(ATCTMigrator, self).migrate_at_uuid()
+
+        new_refs = referenceable.IReferenceable(self.new, None)
+        if old_refs is not None and new_refs is not None:
+            # Reindex references in the reference catalog so they won't be
+            # removed when the old content is removed.
+            for ref in refs:
+                target_refs = referenceable.IReferenceable(
+                    ref.getTargetObject())
+                new_refs.addReference(
+                    target_refs, relationship=ref.relationship)
+
+    def migrate_intid(self):
+        """
+        Transfer the stored IntId to the new content.
+        """
+        if self.intid is not None:
+            intids = component.getUtility(intid_ifaces.IIntIds)
+            intids.unregister(self.old)
+            key = keyref_ifaces.IKeyReference(self.new)
+            intids.refs[self.intid] = key
+            intids.ids[key] = self.intid
+
+    def migrate_relateditems(self):
+        """
+        Migrate the relatedItems ReferenceField to plone.app.relationfield.
+        """
+        intids = component.queryUtility(intid_ifaces.IIntIds)
+        new_refable = referenceable.IReferenceable(self.new, None)
+        if intids is not None and new_refable is not None:
+            field_migrators.migrate_referencefield(
+                self.old, self.new, 'relatedItems', 'relatedItems')
 
     def last_migrate_comments(self):
         """Migrate the plone.app.discussion comments.
