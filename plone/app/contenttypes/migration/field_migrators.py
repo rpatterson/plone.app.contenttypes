@@ -217,4 +217,6 @@ FIELDS_MAPPING = {'RichText': migrate_richtextfield,
                   'NamedBlobImage': migrate_imagefield,
                   'Datetime': migrate_datetimefield,
                   'Date': migrate_datetimefield,
-                  'ReferenceField': migrate_referencefield}
+                  'Relation': migrate_referencefield,
+                  'RelationList': migrate_referencefield,
+                  'RelationChoice': migrate_referencefield}
