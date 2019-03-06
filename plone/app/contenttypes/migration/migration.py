@@ -179,9 +179,10 @@ class ATCTMigrator(object):
         """
         Migrate the relatedItems ReferenceField to plone.app.relationfield.
         """
-        intids = component.queryUtility(intid_ifaces.IIntIds)
-        new_refable = referenceable.IReferenceable(self.new, None)
-        if intids is not None and new_refable is not None:
+        if (
+                component.queryUtility(intid_ifaces.IIntIds) is not None and
+                referenceable.IReferenceable(self.new, None) is not None and
+                self.old.getField('relatedItems') is not None):
             field_migrators.migrate_referencefield(
                 self.old, self.new, 'relatedItems', 'relatedItems')
 
