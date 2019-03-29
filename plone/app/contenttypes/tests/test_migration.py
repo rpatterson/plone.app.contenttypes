@@ -1441,8 +1441,7 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         vocabulary = factory(self.portal)
 
         self.assertEqual(
-            5,
-           len(vocabulary),
+            5, len(vocabulary),
             'Expect 5 entries in vocab because there are 5 diffrent types')
 
         # Result format
