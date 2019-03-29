@@ -7,6 +7,7 @@ from zope import component
 from zope.intid import interfaces as intid_ifaces
 
 from z3c import relationfield
+from z3c.relationfield import event as relationfield_event
 
 from Products.CMFPlone.utils import safe_unicode, safe_hasattr
 from plone.event.utils import default_timezone
@@ -200,8 +201,9 @@ def migrate_referencefield(src_obj, dst_obj, src_fieldname, dst_fieldname):
     intids = component.queryUtility(intid_ifaces.IIntIds)
     dst_relations = []
     for src_target in src_targets:
-        dst_relations.append(
-            relationfield.RelationValue(intids.getId(src_target)))
+        relation = relationfield.RelationValue(intids.getId(src_target))
+        relationfield_event._setRelation(dst_obj, dst_fieldname, relation)
+        dst_relations.append(relation)
         src_refable.deleteReference(referenceable.IReferenceable(src_target))
     if not src_field.multiValued:
         dst_relations, = dst_relations

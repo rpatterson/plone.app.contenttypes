@@ -43,8 +43,6 @@ if TEST_MIGRATION:
     from zope.lifecycleevent import modified
     from zope.schema.interfaces import IVocabularyFactory
 
-    from five.intid import intid
-
     import json
     import os.path
     import time
@@ -969,14 +967,12 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
             migrate=True,
             content_types=['Document'],
             migrate_schemaextended_content=True,
-            migrate_references=True,
             from_form=False,
         )
         migration_view(
             migrate=True,
             content_types=['Folder'],
             migrate_schemaextended_content=True,
-            migrate_references=True,
             from_form=False,
         )
 
@@ -1038,10 +1034,6 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         """
         from Products.Archetypes.interfaces import referenceable
 
-        # IIntIds is not registered in the test env. So register it here
-        sm = component.getSiteManager(self.portal)
-        component.addUtility(
-            sm, IIntIds, intid.IntIds, ofs_name='intids', findroot=False)
         intids = component.getUtility(IIntIds)
 
         # create folders
@@ -1156,6 +1148,8 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
             # blacklisted_steps=['typeinfo']
         )
         # installTypeIfNeeded('News Item')
+        self._enable_referenceable_for('News Item')
+        self._enable_referenceable_for('Document')
         migrate_newsitems(self.portal)
         migrate_documents(self.portal)
 
@@ -1166,7 +1160,6 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         dx_doc = self.portal['doc']
 
         # references are not restored yet
-        self.assertEqual(dx_news.relatedItems, [])
         self.assertEqual(at_doc.getReferences(), [])
         self.assertEqual(at_doc.getBackReferences(), [])
 
@@ -1210,7 +1203,6 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         dx_folder = self.portal['folder']
         at_doc = dx_folder['doc']
         # references are not restored yet
-        self.assertEqual(dx_folder.relatedItems, [])
         self.assertEqual(at_doc.getReferences(), [])
         self.assertEqual(at_doc.getBackReferences(), [])
 
@@ -1332,7 +1324,7 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
         data = json.loads(result)
         self.assertEqual(len(data), 2)
 
-    def test_migrate_references_with_storage_on_portal(self):
+    def test_migrate_references(self):
         set_browserlayer(self.request)
         intids = getUtility(IIntIds)
 
@@ -1374,7 +1366,9 @@ class MigrateFromATContentTypesTest(unittest.TestCase):
 
         # this is basically be the same as above
         installTypeIfNeeded('Document')
+        self._enable_referenceable_for('Document')
         installTypeIfNeeded('Folder')
+        self._enable_referenceable_for('Folder')
         migrate_folders(self.portal)
         migrate_documents(self.portal)
         self.portal.portal_catalog.clearFindAndRebuild()
