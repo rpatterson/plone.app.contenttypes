@@ -141,7 +141,7 @@ def move_comments(source_object, target_object):
     """Move comments by copying the annotation to the target
     and then removing the comments from the source (not the annotation).
     """
-    source_annotations = IAnnotations(source_object)
+    source_annotations = IAnnotations(source_object, {})
     comments = source_annotations.get(DISCUSSION_KEY, None)
     if comments is not None:
         target_annotations = IAnnotations(target_object)
