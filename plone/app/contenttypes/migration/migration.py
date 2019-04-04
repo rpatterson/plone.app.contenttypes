@@ -32,6 +32,7 @@ from plone.dexterity import utils as dx_utils
 
 from Products.Archetypes.interfaces import referenceable
 from Products.CMFCore.utils import getToolByName
+from Products.CMFDynamicViewFTI import interfaces as layout_ifaces
 from Products.contentmigration.basemigrator.migrator import CMFFolderMigrator
 from Products.contentmigration.basemigrator.migrator import CMFItemMigrator
 from Products.contentmigration.basemigrator.walker import CatalogWalker
@@ -195,6 +196,20 @@ class ATCTMigrator(object):
         portal = getToolByName(self.old, 'portal_url').getPortalObject()
         move_comments(portal, self.new)
 
+    def last_migrate_layout(self):
+        """
+        Remove any layout set if not available on the new type.
+        """
+        if layout_ifaces.IBrowserDefault.providedBy(self.new):
+            return
+
+        layout = self.new.getLayout()
+        method_ids = {
+            method_id for method_id, method_title
+            in self.new.getAvailableLayouts()}
+        if layout not in method_ids:
+            self.new.manage_delProperties(['layout'])
+
 
 class ATCTContentMigrator(ATCTMigrator, CMFItemMigrator):
     """Base for contentish ATCT
@@ -248,6 +263,8 @@ class ATCTFolderMigrator(ATCTMigrator, CMFFolderMigrator):
                 # any defaultPage is switched of by setLayout
                 # and needs to set again if it was directly on the object
                 self.new.setDefaultPage(default_page)
+
+        super(ATCTFolderMigrator, self).last_migrate_layout()
 
 
 class DocumentMigrator(ATCTContentMigrator):
@@ -419,6 +436,8 @@ class CollectionMigrator(ATCTContentMigrator):
             except AttributeError:
                 pass
             self.new.setLayout(LISTING_VIEW_MAPPING.get(old_layout, old_layout))  # noqa
+
+        super(CollectionMigrator, self).last_migrate_layout()
 
 
 def migrate_collections(portal):
