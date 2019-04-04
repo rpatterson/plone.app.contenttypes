@@ -237,6 +237,12 @@ class ATCTFolderMigrator(ATCTMigrator, CMFFolderMigrator):
     """Base for folderish ATCT
     """
 
+    def beforeChange_store_default_page(self):
+        """
+        Store the `default_page` before migrating children when it gets unset.
+        """
+        self.default_page = self.old.getDefaultPage()
+
     def migrate_nextprevious(self):
         if self.old.getNextPreviousEnabled():
             if INextPreviousToggle.providedBy(self.new):
@@ -251,7 +257,6 @@ class ATCTFolderMigrator(ATCTMigrator, CMFFolderMigrator):
         """
         old_layout = getattr(aq_base(self.old), 'layout', None)
         if old_layout:
-            default_page = getattr(aq_base(self.old), 'default_page', None)
             try:
                 # Delete old-style layout attribute.
                 del self.new.layout
@@ -259,6 +264,8 @@ class ATCTFolderMigrator(ATCTMigrator, CMFFolderMigrator):
                 pass
             # always copy over the layout, transform if necessary
             self.new.setLayout(LISTING_VIEW_MAPPING.get(old_layout, old_layout))  # noqa
+
+            default_page = self.default_page
             if default_page:
                 # any defaultPage is switched of by setLayout
                 # and needs to set again if it was directly on the object
