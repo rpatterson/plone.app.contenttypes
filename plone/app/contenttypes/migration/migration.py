@@ -200,7 +200,7 @@ class ATCTMigrator(object):
         """
         Remove any layout set if not available on the new type.
         """
-        if layout_ifaces.IBrowserDefault.providedBy(self.new):
+        if not layout_ifaces.IBrowserDefault.providedBy(self.new):
             return
 
         layout = self.new.getLayout()
