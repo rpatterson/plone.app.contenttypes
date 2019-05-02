@@ -19,6 +19,9 @@ Bug fixes:
   Products.contentmigration.
   [rpatterson]
 
+- Fix comments breaking migration for non-annotation types.
+  [rpatterson]
+
 
 1.4.15 (2018-10-09)
 -------------------
