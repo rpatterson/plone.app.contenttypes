@@ -15,7 +15,9 @@ New features:
 
 Bug fixes:
 
-- *add item here*
+- Migrations: Various fixes following upstream changes in
+  Products.contentmigration.
+  [rpatterson]
 
 
 1.4.15 (2018-10-09)

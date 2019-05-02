@@ -7,6 +7,8 @@ only in the setuptools extra_requiers [migrate_atct]. Importing this
 module will only work if Products.contentmigration is installed so make sure
 you catch ImportErrors
 """
+
+from plone.app.blob import markings
 from plone.app.contenttypes.behaviors.collection import ICollection
 from plone.app.contenttypes.migration.dxmigration import DXEventMigrator
 from plone.app.contenttypes.migration.dxmigration import DXOldEventMigrator
@@ -300,11 +302,28 @@ class FileMigrator(ATCTContentMigrator):
         migrate_filefield(self.old, self.new, 'file', 'file')
 
 
+class BlobMigrator(object):
+    """
+    Common methods for migrating blobs.
+    """
+
+    def migrate_provided_interfaces(self):
+        """
+        Remove the type-specific marker interfaces prior to migrating.
+
+        Needed so the Archetype marker interfaces aren't migrated.
+        """
+        super(BlobMigrator, self).migrate_provided_interfaces()
+        # We have to leave the marker interfaces on the old file/image for the
+        # BLOB AT schema fields to work.
+        markings.unmarkAs(self.new, self.src_portal_type)
+
+
 def migrate_files(portal):
     return migrate(portal, FileMigrator)
 
 
-class BlobFileMigrator(FileMigrator):
+class BlobFileMigrator(BlobMigrator, FileMigrator):
 
     src_portal_type = 'File'
     src_meta_type = 'ATBlob'
@@ -331,7 +350,7 @@ def migrate_images(portal):
     return migrate(portal, ImageMigrator)
 
 
-class BlobImageMigrator(ImageMigrator):
+class BlobImageMigrator(BlobMigrator, ImageMigrator):
 
     src_portal_type = 'Image'
     src_meta_type = 'ATBlob'
